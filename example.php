@@ -4,9 +4,15 @@ require_once('odata_server.php');
 
 class odata_server_worker extends odata_server{
     
+    public $fields_int = array('fields_prefix_1');
+    public $fields_boolean;
+    public $fields_double;
+    public $fields_date;
+    public $fields_string;
+    
     public function items($headers, $urls, $params){
         
-        $this->set_feed_name('444');
+        $this->set_feed_params('feed name', 'fields_prefix');
         
         $data = array();
         

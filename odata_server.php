@@ -1,7 +1,13 @@
 <?php
 
 class odata_server{
-	
+    
+    public $fields_int;
+    public $fields_boolean;
+    public $fields_double;
+    public $fields_date;
+    public $fields_string;
+    
     private $_debug;
     private $_cache_allow;
     private $_port;
@@ -12,6 +18,7 @@ class odata_server{
     private $_server;
     private $_url;
     private $_feed_name;
+    private $_feed_fields_prefix;
 	
     function __construct($name, $protocol, $server_address, $port, $cache_allow = TRUE, $debug = FALSE){
         
@@ -49,7 +56,7 @@ class odata_server{
 	    $this->_console_log('DEBUG', 'Receive request');
 	    
             $items = $this->items($headers, $urls, $params);
-	    $data = $this->_result($this->_feed_name, $items);
+	    $data = $this->_result($this->_feed_name, $items, $this->_feed_fields_prefix);
             
             fwrite($this->_connect, "HTTP/1.0 200 OK\r\nConnection:Keep-Alive\r\nContent-Length:".strlen($data)."\r\nContent-Type:text/xml\r\nKeep-Alive:timeout=5, max=99\r\nServer:Apache/2.4.6 (Debian)\r\n\r\n");        
             fwrite($this->_connect, $data);
@@ -61,17 +68,18 @@ class odata_server{
             
         fclose($this->_socket);
     }
-    public function set_feed_name($name){
+    public function set_feed_params($name, $fields_prefix = ''){
 	$this->_feed_name = $name;
+	$this->_feed_fields_prefix = $fields_prefix;
 	return $this;
     }
     private function _result($id, $items, $prefix = '', $nulled = FALSE){
         
-        $dom = new domDocument("1.0", "utf-8"); // Создаём XML-документ версии 1.0 с кодировкой utf-8
+        $dom = new domDocument("1.0", "utf-8");
         $dom->preserveWhiteSpace = false;
         
         $dom->formatOutput = true;
-        $root = $dom->createElement("feed"); // Создаём корневой элемент
+        $root = $dom->createElement("feed");
         
         $root->setAttribute('xml:base', $this->_url.'/'.$id);
         $root->setAttribute('xmlns:d','http://schemas.microsoft.com/ado/2007/08/dataservices');
@@ -156,22 +164,22 @@ class odata_server{
                         
                         //if(in_array($key, array('id','name','surname','email','socialcrm_objects_id','socialcrm_objects_name','type','socialcrm_accounts_type','socialcrm_accounts_username','dynamic','value','timestamp','official','object_type','socialcrm_accounts_aggregated_last_type','socialcrm_accounts_aggregated_last_account_id', 'accounts_deleted','socialcrm_accounts_deleted'))) continue;
                         
-                        if(is_int($value) || in_array($key, array('socialcrm_accounts_aggregated_prev_value', 'socialcrm_accounts_aggregated_difference', 'mongo_profiles_notes_count','mongo_profiles_relation','mongo_profiles_listed_count','mongo_profiles_favourites_count','mongo_profiles_comments_count','mongo_profiles_audios_count','mongo_profiles_photos_count','mongo_profiles_videos_count','mongo_profiles_albums_count','mongo_profiles_groups_count','mongo_profiles_sex','mongo_profiles_tags_count','mongo_profiles_created','mongo_profiles_last_visit_time','mongo_profiles_statuses_count','mongo_profiles_followers_count','mongo_profiles_friends_count','mongo_documents_category','socialcrm_statistic_intraday_replay_object','socialcrm_statistic_intraday_replay_value','socialcrm_accounts_aggregated_value','id','socialcrm_accounts_aggregated_last_value','socialcrm_users_id','socialcrm_objects_id','socialcrm_accounts_id'))){
+                        if(is_int($value) || in_array($key, $this->fields_int)){
                             $tmp = $dom->createElement($field, $value);
                             $tmp->setAttribute('m:type', 'Edm.Int32');
-                        }elseif(in_array($key, array('mongo_profiles_birthday','mongo_documents_date','socialcrm_statistic_intraday_replay_date','socialcrm_accounts_aggregated_last_date','socialcrm_accounts_aggregated_date'))){
+                        }elseif(in_array($key, $this->fields_date)){
                             $tmp = $dom->createElement($field, date("Y-m-d\TH:i:s\Z",strtotime($value)));
                             $tmp->setAttribute('m:type', 'Edm.DateTimeOffset');
                         }elseif($key == 'id'){
                             $tmp = $dom->createElement($field, $value);
                             //$tmp->setAttribute('m:type', 'Edm.Guid');
-                        }elseif(in_array($key, array('mongo_profiles_protected','socialcrm_accounts_aggregated_last_dynamic','socialcrm_objects_deleted','socialcrm_accounts_deleted','socialcrm_accounts_verify_by_api'))){
-                            $tmp = $dom->createElement($field, strtr($value, array('yes' => 'true', 'no' => 'false', 'up' => 'true', 'down' => 'false', '0' => 'false', '1' => 'true')));
+                        }elseif(in_array($key, $this->fields_boolean)){
+                            $tmp = $dom->createElement($field, strtr($value, array('yes' => 'true', 'no' => 'false', 'up' => 'true', 'down' => 'false', '1' => 'true', '0' => 'false',)));
                             $tmp->setAttribute('m:type', 'Edm.Boolean');
-                        }elseif(in_array($key, array('socialcrm_objects_index','socialcrm_objects_dpu'))){
+                        }elseif(in_array($key, $this->fields_double)){
                             $tmp = $dom->createElement($field, $value);
                             $tmp->setAttribute('m:type', 'Edm.Double');
-                        }elseif(in_array($key, array('mongo_documents_account_id','mongo_profiles_lang','mongo_profiles_social_author_nickname','mongo_profiles_id','mongo_profiles_type','mongo_profiles_object_type','mongo_profiles_social_author_id','mongo_documents_lat','mongo_documents_lng','mongo_documents_type','mongo_documents_social_author_id','mongo_documents_social_id','mongo_documents_id','mongo_documents_social_id','socialcrm_statistic_intraday_replay_type','socialcrm_accounts_aggregated_type','socialcrm_accounts_aggregated_last_type','socialcrm_users_email','socialcrm_accounts_object_type','socialcrm_objects_name','socialcrm_objects_type','socialcrm_accounts_type'))){
+                        }elseif(in_array($key, $this->fields_string)){
                             $tmp = $dom->createElement($field, $value);
                             $tmp->setAttribute('m:type', 'Edm.String');
                         }else{
@@ -179,7 +187,6 @@ class odata_server{
                             $tmp = $dom->createElement($field);
                             $tmp->appendChild($cdata);
                         }
-                        
                         
                         $properties->appendChild($tmp);       
                     }
@@ -212,7 +219,12 @@ class odata_server{
         
         if($request != '/'){
             $request = substr($request, 4, strpos($request, " HTTP") - 4);
-            $request = substr($request, 0, strpos($request, "?"));
+	    
+	    if(substr_count($request, "?") > 0){
+		$request = substr($request, 0, strpos($request, "?"));
+	    }else{
+		$request = substr($request, 0);
+	    }
             $urls = array_filter(explode('/', $request));
             
             return $urls;
@@ -222,17 +234,26 @@ class odata_server{
     }
     private function _parse_raw_http_params($request){
         
-        $params = array();
-        $request = substr($request, 4, strpos($request, " HTTP") - 4);
-        $request = substr($request, strpos($request, "?") + 1);
-        $pairs = explode('&', $request);
-        foreach($pairs as $pair) {
-            $part = explode('=', $pair);
-            $param = str_replace('?', '', strtolower(substr($part[0], strpos($part[0], "?"))));
-            $params[$param] = urldecode($part[1]);
-        }
-        
-        return $params;
+	if(substr_count($request, "?") > 0){
+	
+	    $params = array();
+	    $request = substr($request, 4, strpos($request, " HTTP") - 4);
+	    $request = substr($request, strpos($request, "?") + 1);
+	    
+	    if(empty($request)) return array();
+	    
+	    $pairs = explode('&', $request);
+	    foreach($pairs as $pair) {
+		$part = explode('=', $pair);
+		$param = str_replace('?', '', strtolower(substr($part[0], strpos($part[0], "?"))));
+		$value = isset($part[1]) ? urldecode($part[1]) : null;
+		$params[$param] = $value;
+	    }
+	    
+	    return $params;
+	}else{
+	    return array();
+	}
     }
     private function _parse_raw_http_headers($request){
     
