@@ -9,7 +9,7 @@ class odata_server{
     public $fields_string;
     
     private $_debug;
-    private $_cache_allow;
+    private $_cache_time;
     private $_port;
     private $_name;
     private $_socket;
@@ -20,7 +20,7 @@ class odata_server{
     private $_feed_name;
     private $_feed_fields_prefix;
 	
-    function __construct($name, $protocol, $server_address, $port, $cache_allow = TRUE, $debug = FALSE){
+    function __construct($name, $protocol, $server_address, $port, $cache_time = 0, $debug = FALSE){
         
 	$this->_console_log('INFO', 'Applying settings');
 		
@@ -32,7 +32,7 @@ class odata_server{
         $this->_name = $name;	
         $this->_port = $port;
         $this->_debug = $debug;
-        $this->_cache_allow = $cache_allow;
+        $this->_cache_time = $cache_time;
         
 	$this->_protocol = $protocol;
         $this->_server = $server_address;
@@ -55,9 +55,60 @@ class odata_server{
             
 	    $this->_console_log('DEBUG', 'Receive request');
 	    
-            $items = $this->items($headers, $urls, $params);
-	    $data = $this->_result($this->_feed_name, $items, $this->_feed_fields_prefix);
-            
+	    if($this->_cache_time > 0){
+		
+		$folder_name = implode('_', $urls).implode('_', $params);
+		
+		if(is_dir('./cache/'.$folder_name)){
+		    
+		    $files = scandir('./cache/'.$folder_name);
+		    $cache_file_name = '';
+		    
+		    foreach($files as $file){
+			if(in_array($file, array('.', '..'))) continue;
+			$cache_diff = time() - intval($file);
+			
+			if($cache_diff <= $this->_cache_time){
+			    
+			    $cache_file_name = './cache/'.$folder_name.'/'.$file;
+			    
+			    break;
+			}else{
+			    unlink('./cache/'.$folder_name.'/'.$file);
+			}
+			
+		    }
+		    
+		    if(empty($cache_file_name)){
+			$items = $this->items($headers, $urls, $params);
+			$data = $this->_result($this->_feed_name, $items, $this->_feed_fields_prefix);
+			
+			file_put_contents('./cache/'.$folder_name.'/'.time(), $data);
+			
+			$this->_console_log('INFO', 'Items load, and update CACHE');
+		    }else{
+			$data = file_get_contents($cache_file_name);	    
+			$this->_console_log('INFO', 'Items load from CACHE ('.$cache_diff.')');    	    
+		    }
+		    
+		}else{
+		    
+		    mkdir('./cache/'.$folder_name);
+		    
+		    $items = $this->items($headers, $urls, $params);
+		    $data = $this->_result($this->_feed_name, $items, $this->_feed_fields_prefix);
+		    
+		    file_put_contents('./cache/'.$folder_name.'/'.time(), $data);
+		    
+		    $this->_console_log('INFO', 'Items load, and generate CACHE');
+		}
+		
+	    }else{
+		$this->_console_log('INFO', 'Items load from USER');	
+		$items = $this->items($headers, $urls, $params);
+		$data = $this->_result($this->_feed_name, $items, $this->_feed_fields_prefix);
+	    }
+	    
             fwrite($this->_connect, "HTTP/1.0 200 OK\r\nConnection:Keep-Alive\r\nContent-Length:".strlen($data)."\r\nContent-Type:text/xml\r\nKeep-Alive:timeout=5, max=99\r\nServer:Apache/2.4.6 (Debian)\r\n\r\n");        
             fwrite($this->_connect, $data);
 	    
@@ -280,6 +331,7 @@ class odata_server{
         $this->_console_log('DEBUG', 'Checking paths');
         
         if(!is_dir('./logs')) mkdir('./logs');
+	if($this->_cache_time > 0 && !is_dir('./cache')) mkdir('./cache');
         
         $this->_console_log('DEBUG', 'Creating socket');
         

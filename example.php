@@ -37,7 +37,7 @@ class odata_server_worker extends odata_server{
     
 }
 
-$odata_server_worker = new odata_server_worker('Test OData','http://', 'localhost', 4111, FALSE, TRUE);
+$odata_server_worker = new odata_server_worker('Test OData','http://', 'localhost', 4111, 10, TRUE);
 $odata_server_worker->start();
 
 ?>
