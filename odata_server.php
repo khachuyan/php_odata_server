@@ -109,7 +109,7 @@ class odata_server{
 		$data = $this->_result($this->_feed_name, $items, $this->_feed_fields_prefix);
 	    }
 	    
-            fwrite($this->_connect, "HTTP/1.0 200 OK\r\nConnection:Keep-Alive\r\nContent-Length:".strlen($data)."\r\nContent-Type:text/xml\r\nKeep-Alive:timeout=5, max=99\r\nServer:Apache/2.4.6 (Debian)\r\n\r\n");        
+            fwrite($this->_connect, "HTTP/1.0 200 OK\r\nConnection:Keep-Alive\r\nContent-Length:".strlen($data)."\r\nContent-Type:text/xml\r\nKeep-Alive:timeout=5, max=99\r\nServer:Apache/2.4.6 (Debian)\r\n\r\n");   
             fwrite($this->_connect, $data);
 	    
 	    $this->_console_log('DEBUG', 'Response sent');
@@ -123,6 +123,12 @@ class odata_server{
 	$this->_feed_name = $name;
 	$this->_feed_fields_prefix = $fields_prefix;
 	return $this;
+    }
+    public function http_code($code){
+	
+	$realm = 'Restricted area';
+	fwrite($this->_connect, 'HTTP/1.1 401 Unauthorized'."\r\n".'WWW-Authenticate: Digest realm="'.$realm.'",qop="auth",nonce="'.uniqid().'",opaque="'.md5($realm));
+	$this->_console_log('DEBUG', 'Not authorized');
     }
     private function _result($id, $items, $prefix = '', $nulled = FALSE){
         
@@ -326,7 +332,7 @@ class odata_server{
             
         $this->_console_log('DEBUG', 'Initialization');
 	
-	$this->_feed_name = 'test feed';
+	$this->_feed_name = '';
 	
         $this->_console_log('DEBUG', 'Checking paths');
         
@@ -359,7 +365,7 @@ class odata_server{
 	print("[".$level."]\t".date('Y-m-d H:i:s', time())." ".$message.PHP_EOL);
 	if($die) exit();
     }
-    private function _err_handler($errno, $errmsg, $filename, $linenum) {
+    protected function _err_handler($errno, $errmsg, $filename, $linenum) {
 	if($this->_debug) $this->_console_log('ERROR', $errno.':'.$errmsg.':'.$filename.':'.$linenum);
 	file_put_contents('./logs/error.log', date('Y-m-d H:i:s').' [ERROR] '.$errno.':'.$errmsg.':'.$filename.':'.$linenum.PHP_EOL, FILE_APPEND);
     }
